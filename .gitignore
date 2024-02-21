@@ -41,3 +41,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+/lib/libV1.rar
+/lib/libV2.rar
+/lib/libV3.rar

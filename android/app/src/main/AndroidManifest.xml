@@ -30,4 +30,23 @@
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
+
+        <!-- Add this outside the <application> tag -->
+            <queries>
+                <!-- For opening web URLs -->
+                <intent>
+                    <action android:name="android.intent.action.VIEW" />
+                    <data android:scheme="http" />
+                </intent>
+                <intent>
+                    <action android:name="android.intent.action.VIEW" />
+                    <data android:scheme="https" />
+                </intent>
+        
+                <!-- For opening Google Maps -->
+                <intent>
+                    <action android:name="android.intent.action.VIEW" />
+                    <data android:scheme="geo" />
+                </intent>
+            </queries>
 </manifest>
