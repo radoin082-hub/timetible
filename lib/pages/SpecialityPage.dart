@@ -1,8 +1,11 @@
+
+
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:timo/Lang/Language.dart';
 import 'package:timo/Services/cls.dart';
@@ -10,8 +13,10 @@ import 'package:timo/pages/LevelPage.dart';
 
 class SpecialityPage extends StatefulWidget {
   final String departmentId;
+  final String? specialtyId; // Make it optional by using String?
 
-  SpecialityPage({required this.departmentId});
+  // Make specialtyId optional in the constructor
+  SpecialityPage({required this.departmentId, this.specialtyId});
 
   @override
   _SpecialityPageState createState() => _SpecialityPageState();
@@ -69,18 +74,23 @@ class _SpecialityPageState extends State<SpecialityPage> {
               itemBuilder: (context, index) {
                 return ListTile(
                   title: Text(specialities[index]['Nom_spec']),
-                  onTap: () {
-                    Provider.of<TimetableData>(context, listen: false).setSpecialtyId(specialities[index]['id_specialty']);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => LevelPage(id_specialty: specialities[index]['id_specialty']),
-                      ),
-                    );
-                  },
+                 onTap: () async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  await prefs.setString('lastSpecialtyId', specialities[index]['id_specialty']);
+  Provider.of<TimetableData>(context, listen: false).setSpecialtyId(specialities[index]['id_specialty']);
+ 
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => LevelPage(id_specialty: specialities[index]['id_specialty']),
+    ),
+  );
+},
+
                 );
               },
             ),
     );
   }
 }
+

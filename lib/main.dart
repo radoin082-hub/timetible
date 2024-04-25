@@ -1,61 +1,48 @@
 import 'package:flutter/material.dart';
-import 'package:animated_text_kit/animated_text_kit.dart'; 
 import 'package:provider/provider.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'package:timo/Lang/Language.dart';
 import 'package:timo/Services/cls.dart';
-import 'Lang/Language.dart';
-import 'pages/FacultiesPage.dart';
+import 'package:timo/pages/FacultiesPage.dart';
+import 'package:timo/pages/TimeTabel.dart';
+import 'package:timo/Management/SharedPreferences.dart'; // Make sure to import your Prefs class
 
-void main() {
-  runApp(
-    MultiProvider( 
-      providers: [
-        ChangeNotifierProvider(create: (context) => Language()),
-        ChangeNotifierProvider(create: (context) => TimetableData()),
-      ],
-      child: MyApp(),
-    ),
-  );
+void main() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await Prefs.init(); // Initialize Prefs 
+    bool isFirstRun = Prefs.isFirstRun;
+    bool hasAllIds = Prefs.getIdSpecialty() != null;
+
+    runApp(
+        MultiProvider(
+            providers: [
+                ChangeNotifierProvider(create: (context) => Language()),
+                ChangeNotifierProvider(create: (context) => TimetableData()),
+            ],
+            child: ShowCaseWidget(
+                builder: Builder(
+                    builder: (context) => MyApp(isFirstRun: isFirstRun, hasAllIds: hasAllIds),
+                ),
+            ),
+        ),
+    );
 }
 
 class MyApp extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      themeMode: MediaQuery.of(context).platformBrightness == Brightness.dark
-          ? ThemeMode.dark
-          : ThemeMode.light,
-      theme: ThemeData.light(), // Light theme
-      darkTheme: ThemeData.dark(), // Dark theme
-      home: SplashPage(),
-    );
-  }
-}
+    final bool isFirstRun;
+    final bool hasAllIds;
 
+    MyApp({required this.isFirstRun, required this.hasAllIds});
 
-class SplashPage extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    // Add a delay before navigating to FacultiesPage
-    Future.delayed(Duration(seconds: 4), () {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => FacultiesPage()),
-      );
-    });
-
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            TypewriterAnimatedTextKit(
-              text: ['TIMO\nBiskra Unversity Time Table'],
-              textStyle: TextStyle(fontSize: 32.0, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
+    @override
+    Widget build(BuildContext context) {
+        return MaterialApp(
+            title: 'TIMO Biskra University Time Table',
+            theme: ThemeData(
+                primarySwatch: Colors.blue,
+                visualDensity: VisualDensity.adaptivePlatformDensity,
             ),
-          ],
-        ),
-      ),
-    );
-  }
+            home: isFirstRun ? FacultiesPage() : (hasAllIds ? TimeTablePage() : FacultiesPage()),
+        );
+    }
 }

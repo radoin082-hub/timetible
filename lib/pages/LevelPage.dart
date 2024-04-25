@@ -1,3 +1,5 @@
+
+
 // ignore: file_names
 import 'dart:convert';
 
@@ -100,7 +102,7 @@ onTap: () {
   }
 
   // تعيين قيمة niveau في Provider
-  Provider.of<TimetableData>(context, listen: false).setNiveau(niveauValue);
+  Provider.of<TimetableData>(context, listen: false).setLevelId(niveauValue);
 
   // التنقل إلى SectionPage
   Navigator.push(
@@ -118,5 +120,3 @@ onTap: () {
     );
   }
 }
-
-

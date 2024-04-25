@@ -1,8 +1,11 @@
+
+
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timo/Lang/Language.dart';
 import 'package:timo/Services/cls.dart';
 import 'package:timo/pages/GroupPage.dart';
@@ -74,11 +77,11 @@ Response from Your_API_Endpoint: ${response.data}
         itemBuilder: (context, index) {
           return ListTile(
   title: Text(isFrench ? sections[index]['Abrev_fr'] : sections[index]['Abrev_ar']),
-   onTap: () {
-  // تخزين قيمة sectionId في Provider
-  Provider.of<TimetableData>(context, listen: false).setSectionId(sections[index]['sectionn_id']);
+ onTap: () async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  await prefs.setString('lastSectionId', sections[index]['sectionn_id']);
+    Provider.of<TimetableData>(context, listen: false).setSectionId(sections[index]['sectionn_id']);
 
-  // التنقل إلى GroupPage
   Navigator.push(
     context,
     MaterialPageRoute(
@@ -87,6 +90,7 @@ Response from Your_API_Endpoint: ${response.data}
   );
 }
 
+
           );
         },
       ),
@@ -94,5 +98,3 @@ Response from Your_API_Endpoint: ${response.data}
   }
 
 }
-
-

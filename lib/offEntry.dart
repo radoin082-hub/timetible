@@ -1,4 +1,4 @@
-class TimetableEntry {
+class offEntry {
   String className;
   String location;
   String courseType;
@@ -15,7 +15,7 @@ class TimetableEntry {
   String onlineLink;
   String gpsLocation;
 
-  TimetableEntry({
+  offEntry({
     required this.className,
     required this.location,
     required this.courseType,
@@ -33,32 +33,52 @@ class TimetableEntry {
     required this.gpsLocation,
   });
 
-
-
-
-  factory TimetableEntry.fromJson(List<dynamic> json) {
-    return TimetableEntry(
-      className: json[0] as String,
-      location: json[1] as String,
-      courseType: json[2] as String,
-      level: json[3] as String,
-      field: json[4] as String,
-      professorLastName: json[5] as String,
-      professorFirstName: json[6] as String,
-      moduleCode: json[8] as String,
-      dayOfWeek: int.tryParse(json[12].toString()) ?? 0,
-      timeSlot: int.tryParse(json[13].toString()) ?? 0,
-      subGroup: json.length > 20 ? json[20] as String : "",
-      isOnline: json[19] == "1",
-      isBiweekly: json[20] == "1",
-      onlineLink: json.length > 21 ? json[21] as String : "",
-      gpsLocation: json.length > 22 ? json[22] as String : "",
+  factory offEntry.fromJson(Map<String, dynamic> json) {
+    return offEntry(
+      className: json['className'],
+      location: json['location'],
+      courseType: json['courseType'],
+      level: json['level'],
+      field: json['field'],
+      professorLastName: json['professorLastName'],
+      professorFirstName: json['professorFirstName'],
+      moduleCode: json['moduleCode'],
+      dayOfWeek: json['dayOfWeek'],
+      timeSlot: json['timeSlot'],
+      subGroup: json['subGroup'],
+      isOnline: json['isOnline'].toString() == "1",
+      isBiweekly: json['isBiweekly'].toString() == "1",
+      onlineLink: json['onlineLink'],
+      gpsLocation: json['gpsLocation'],
     );
   }
 
-  String get dayName {
+  Map<String, dynamic> toJson() {
+    return {
+      'className': className,
+      'location': location,
+      'courseType': courseType,
+      'level': level,
+      'field': field,
+      'professorLastName': professorLastName,
+      'professorFirstName': professorFirstName,
+      'moduleCode': moduleCode,
+      'dayOfWeek': dayOfWeek,
+      'timeSlot': timeSlot,
+      'subGroup': subGroup,
+      'isOnline': isOnline ? '1' : '0',
+      'isBiweekly': isBiweekly ? '1' : '0',
+      'onlineLink': onlineLink,
+      'gpsLocation': gpsLocation,
+    };
+  }
+  
+  String formatTime(Duration duration) {
+    return '${duration.inHours.toString().padLeft(2, '0')}:${(duration.inMinutes % 60).toString().padLeft(2, '0')}';
+  }
+   String get dayName {
     List<String> days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return dayOfWeek >= 1 && dayOfWeek <= 7 ? days[dayOfWeek - 1] : 'Week-end';
+    return dayOfWeek >= 1 && dayOfWeek <= 7 ? days[dayOfWeek - 1] : 'Unknown';
   }
 
   String get classTime {
@@ -105,29 +125,4 @@ Map<String, String> getSlotTime() {
     };
   }
 
-  
-  Map<String, dynamic> toJson() {
-    return {
-      'className': className,
-      'location': location,
-      'courseType': courseType,
-      'level': level,
-      'field': field,
-      'professorLastName': professorLastName,
-      'professorFirstName': professorFirstName,
-      'moduleCode': moduleCode,
-      'dayOfWeek': dayOfWeek,
-      'timeSlot': timeSlot,
-      'subGroup': subGroup,
-      'isOnline': isOnline ? '1' : '0',
-      'isBiweekly': isBiweekly ? '1' : '0',
-      'onlineLink': onlineLink,
-      'gpsLocation': gpsLocation,
-    };
-  }
 }
-
-  String formatTime(Duration duration) {
-    return '${duration.inHours.toString().padLeft(2, '0')}:${(duration.inMinutes % 60).toString().padLeft(2, '0')}';
-  }
-  

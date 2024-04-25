@@ -1,0 +1,1514 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:timo/Services/cls.dart';
+import 'package:timo/pages/LevelPage.dart';
+import 'package:timo/pages/SpecialityPage.dart';
+
+class CustomSpecialtySearchDelegate extends SearchDelegate {
+  final Dio dio = Dio();
+    Timer? _debounce;
+
+  final List<String> departmentIds;
+
+  CustomSpecialtySearchDelegate(this.departmentIds);
+
+  @override
+  List<Widget> buildActions(BuildContext context) {
+    return [
+      IconButton(
+        icon: Icon(Icons.clear),
+        onPressed: () {
+          query = '';
+          showSuggestions(context);
+        },
+      ),
+    ];
+  }
+
+  @override
+  Widget buildLeading(BuildContext context) {
+    return IconButton(
+      icon: Icon(Icons.arrow_back),
+      onPressed: () => close(context, null),
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return Container();
+  }
+
+@override
+Widget buildSuggestions(BuildContext context) {
+  
+  return FutureBuilder<List<dynamic>>(
+    future: fetchSpecialties(query),
+    builder: (context, snapshot) {
+      if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+      var suggestions = snapshot.data!;
+      return ListView.builder(
+        itemCount: suggestions.length,
+        itemBuilder: (context, index) {
+          var specialty = suggestions[index];
+          return ListTile(
+            title: Text(specialty['Nom_spec']),
+            subtitle: Text(specialty['name_spec_ar']),
+            onTap: () {
+              Provider.of<TimetableData>(context, listen: false).setSpecialtyId(specialty['id_specialty']);
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (context) => LevelPage(id_specialty: specialty['id_specialty']),
+              ));
+            },
+          );
+        },
+      );
+    },
+  );
+}
+
+  Future<List<dynamic>> fetchSpecialties(String query) async {
+    List<dynamic> specialtiesResults = [];
+    for (String departmentId in departmentIds) {
+      try {
+        final response = await dio.get('https://num.univ-biskra.dz/psp/pspapi/specialty?department=$departmentId&semester=2&key=appmob');
+        if (response.statusCode == 200) {
+          final List<dynamic> specialties = json.decode(response.data);
+          specialtiesResults.addAll(specialties.where((specialty) =>
+            specialty['AbrevFR'].toLowerCase().contains(query.toLowerCase()) ||
+            specialty['name_spec_ar'].toLowerCase().contains(query.toLowerCase())));
+        }
+      } catch (e) {
+        print("Error fetching specialties: $e");
+      }
+    }
+    return specialtiesResults;
+  }
+}
+
+import 'package:flutter/material.dart';
+
+class Language with ChangeNotifier {
+  bool _isFrench = true;
+
+  bool get isFrench => _isFrench;
+
+  void toggleLanguage() {
+    _isFrench = !_isFrench;
+    notifyListeners();
+  }
+}
+
+import 'package:shared_preferences/shared_preferences.dart';
+
+class PreferencesManager {
+  static SharedPreferences? _prefs;
+
+  static Future<void> initializePrefs() async {
+    _prefs = await SharedPreferences.getInstance();
+  }
+
+  static Future<void> saveFacultyId(String facultyId) async {
+    await _prefs?.setString('facultyId', facultyId);
+  }
+
+  static String? getFacultyId() {
+    return _prefs?.getString('facultyId');
+  }
+}
+
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timo/Lang/Language.dart';
+import 'package:timo/pages/SpecialityPage.dart';
+class DepartmentsPage extends StatefulWidget {
+  final String facultyId;
+
+  DepartmentsPage({required this.facultyId});
+
+  @override
+  _DepartmentsPageState createState() => _DepartmentsPageState();
+}
+
+class _DepartmentsPageState extends State<DepartmentsPage> {
+  List departments = [];
+  Dio dio = Dio();
+
+  @override
+  void initState() {
+    super.initState();
+    fetchDepartments();
+  }
+
+  fetchDepartments() async {
+    try {
+      final response = await dio.get('http://num.univ-biskra.dz/psp/pspapi/department?faculty=${widget.facultyId}&key=appmob');
+      final data = json.decode(response.data);
+      setState(() {
+        departments = data;
+      });
+    } catch (e) {
+      print(e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    bool isFrench = Provider.of<Language>(context).isFrench;
+    bool isDarkMode = Theme.of(context).brightness == Brightness.dark; // Check if dark mode is enabled
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Departments'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.language),
+            onPressed: () {
+              Provider.of<Language>(context, listen: false).toggleLanguage();
+            },
+          ),
+        ],
+      ),
+      body: ListView.builder(
+        itemCount: departments.length,
+        itemBuilder: (context, index) {
+          return Container(
+            margin: EdgeInsets.all(8.0),
+            decoration: BoxDecoration(
+              color: isDarkMode ? Color.fromARGB(255, 0, 0, 0) : Colors.white, // Adjust background color based on theme
+              borderRadius: BorderRadius.circular(10.0),
+              boxShadow: [
+                BoxShadow(
+                  color:isDarkMode ?  Colors.red.withOpacity(0.3):Colors.grey.withOpacity(0.5),
+                  spreadRadius:0.4,
+                  blurRadius: 3,
+                  offset: Offset(1, 1),
+                ),
+              ],
+            ),
+            child: ListTile(
+              title: Text(isFrench ? departments[index]['name_fr'] : departments[index]['name_ar']),
+              leading: Icon(Icons.account_balance),
+              // DepartmentsPage.dart
+onTap: () async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  await prefs.setString('lastDepartmentId', departments[index]['id']);
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => SpecialityPage(departmentId: departments[index]['id']),
+    ),
+  );
+},
+
+
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dio/dio.dart';
+import 'package:timo/Feautres/CustomSpecialtySearchDelegate.dart';
+import 'package:timo/Lang/Language.dart';
+import 'package:timo/pages/DepartmentsPage.dart';
+
+class FacultiesPage extends StatefulWidget {
+  @override
+  _FacultiesPageState createState() => _FacultiesPageState();
+}
+
+class _FacultiesPageState extends State<FacultiesPage> {
+  List faculties = [];
+  Dio dio = Dio();
+  bool isLoading = true;
+    bool isArabic = false; // Added state variable to track language
+
+
+  @override
+  void initState() {
+    super.initState();
+    fetchFaculties();
+  }
+
+  fetchFaculties() async {
+    try {
+      final response = await dio.get('http://num.univ-biskra.dz/psp/pspapi/faculty?key=appmob');
+      final data = json.decode(response.data);
+      setState(() {
+        faculties = data;
+        isLoading = false;
+      });
+    } catch (e) {
+      print(e);
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+appBar: AppBar(
+  title: Text('Faculties'),
+  actions: [
+     IconButton(
+            icon: Icon(Icons.language),
+            onPressed: () {
+              setState(() {
+                isArabic = !isArabic; // Toggle language state
+              });
+              Provider.of<Language>(context, listen: false).toggleLanguage();
+            },
+          ),
+IconButton(
+  icon: Icon(Icons.search),
+  onPressed: () {
+    // Assuming you have a list of department IDs to search within
+    List<String> departmentIds = List.generate(32, (index) => (index + 1).toString());
+    showSearch(context: context, delegate: CustomSpecialtySearchDelegate(departmentIds));
+  },
+),
+
+
+  ],
+),
+        body: isLoading
+          ? Center(child: CircularProgressIndicator())
+          : ListView.builder(
+              itemCount: faculties.length,
+              itemBuilder: (context, index) {
+                return Card(
+                  elevation: 4.0,
+                  margin: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  child: ListTile(
+                    leading: Icon(Icons.school, color: Theme.of(context).primaryColor),
+                    title: Text(
+                      isArabic ? faculties[index]['name_fac_ar'] : faculties[index]['name_fac'],
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      isArabic ? faculties[index]['name_fac'] : faculties[index]['name_fac_ar'],
+                    ),
+                    trailing: Icon(Icons.arrow_forward, color: Theme.of(context).primaryColor),
+                    onTap: () async {
+                      SharedPreferences prefs = await SharedPreferences.getInstance();
+                      await prefs.setString('lastFacultyId', faculties[index]['id_fac']);
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => DepartmentsPage(facultyId: faculties[index]['id_fac']),
+                      ));
+                    },
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+
+
+
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:timo/Lang/Language.dart';
+import 'package:timo/Services/cls.dart';
+import 'package:timo/pages/TimeTabel.dart';
+
+class GroupPage extends StatefulWidget {
+  final String sectionID;
+
+  GroupPage({required this.sectionID});
+
+  @override
+  _GroupPageState createState() => _GroupPageState();
+}
+
+class _GroupPageState extends State<GroupPage> {
+  List group = [];
+  Dio dio = Dio();
+
+  @override
+  void initState() {
+    super.initState();
+    fetchGroup();
+  }
+fetchGroup() async {
+  try {
+final response = await dio.get('https://num.univ-biskra.dz/psp/pspapi/group?section=${widget.sectionID}&semester=2&key=appmob');
+    final data = json.decode(response.data); // Decode the JSON string
+    setState(() {
+      group = data; // Use the decoded data
+    });
+  } catch (e) {
+    print(e);
+  }
+}
+  @override
+  Widget build(BuildContext context) {
+    bool isFrench = Provider.of<Language>(context).isFrench; // Access the language state
+
+    return Scaffold(
+
+     appBar: AppBar(
+        title: Text('Groups'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.language),
+            onPressed: () {
+              Provider.of<Language>(context, listen: false).toggleLanguage(); // Toggling language
+            },
+          ),
+        ],
+      ),
+      body: ListView.builder(
+        itemCount: group.length,
+        itemBuilder: (context, index) {
+          return ListTile(
+title: Text(isFrench ? group[index]['Abrev_fr'] : group[index]['Abrev_ar']),
+             onTap: () {
+  final timetableData = Provider.of<TimetableData>(context, listen: false);
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => TimeTablePage(),
+    ),
+  );
+}
+
+          );
+        },
+      ),
+    );
+  }
+}
+
+
+// ignore: file_names
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:timo/Lang/Language.dart';
+import 'package:timo/Services/cls.dart';
+import 'package:timo/pages/SectionPage.dart';
+
+class LevelPage extends StatefulWidget {
+  final String id_specialty;
+
+
+  LevelPage({required this.id_specialty});
+
+  @override
+  _LevelPageState createState() => _LevelPageState();
+}
+
+class _LevelPageState extends State<LevelPage> {
+  List levels = [];
+  Dio dio = Dio();
+
+  @override
+  void initState() {
+    super.initState();
+    fetchLevels();
+  }
+fetchLevels() async {
+  try {
+    final response = await dio.get('https://num.univ-biskra.dz/psp/pspapi/level?specialty=${widget.id_specialty}&semester=2&key=appmob');
+    print('''
+=========================================================================================================
+=========================================================================================================
+=========================================
+=========================================================================================================
+Response from Your_API_Endpoint: ${response.data}
+=========================================================================================================
+=========================================================================================================
+=========================================================================================================
+''');
+    final data = json.decode(response.data); // Decode the JSON string
+    setState(() {
+      levels = data; // Use the decoded data
+    });
+  } catch (e) {
+    print(e);
+  }
+}
+  @override
+  Widget build(BuildContext context) {
+
+    return Scaffold(
+
+     appBar: AppBar(
+        title: Text('Level'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.language),
+            onPressed: () {
+              Provider.of<Language>(context, listen: false).toggleLanguage(); // Toggling language
+            },
+          ),
+        ],
+      ),
+      body: ListView.builder(
+        itemCount: levels.length,
+        itemBuilder: (context, index) {
+          return ListTile(
+  title: Text(
+    levels[index]['id_niveau'] == "1" ? "L1" :
+    levels[index]['id_niveau'] == "2" ? "L2" :
+    levels[index]['id_niveau'] == "3" ? "L3" :
+    levels[index]['id_niveau'] == "4" ? "M1" :
+    levels[index]['id_niveau'] == "5" ? "M2" : "Unknown Level"
+  ),
+  
+onTap: () {
+  // تحديد قيمة niveau بناءً على id_niveau
+  String niveauValue = "";
+  switch (levels[index]['id_niveau']) {
+    case "1":
+      niveauValue = "1";
+      break;
+    case "2":
+      niveauValue = "2";
+      break;
+    case "3":
+      niveauValue = "3";
+      break;
+    case "4":
+      niveauValue = "4";
+      break;
+    case "5":
+      niveauValue = "5";
+      break;
+    default:
+      niveauValue = "0"; // قيمة افتراضية في حال لم يتم تطابق أي حالات
+  }
+
+  // تعيين قيمة niveau في Provider
+  Provider.of<TimetableData>(context, listen: false).setLevelId(niveauValue);
+
+  // التنقل إلى SectionPage
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => SectionPage(level_specialty: levels[index]['id_niv_spec']),
+    ),
+  );
+}
+
+
+          );
+        },
+      ),
+    );
+  }
+}
+
+
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timo/Lang/Language.dart';
+import 'package:timo/Services/cls.dart';
+import 'package:timo/pages/GroupPage.dart';
+  String gLevel='';
+class SectionPage extends StatefulWidget {
+  final String level_specialty ;
+
+
+
+  SectionPage({required this.level_specialty });
+
+  @override
+  _SectionPageState createState() => _SectionPageState();
+}
+
+class _SectionPageState extends State<SectionPage> {
+  List sections = [];
+  Dio dio = Dio();
+
+  @override
+  void initState() {
+    super.initState();
+    fetchSections();
+  }
+fetchSections() async {
+  try {
+    final response = await dio.get('https://num.univ-biskra.dz/psp/pspapi/section?level_specialty=${widget.level_specialty}&semester=2&key=appmob');
+  print('''
+=========================================================================================================
+=========================================================================================================
+=========================================
+=========================================================================================================
+Response from Your_API_Endpoint: ${response.data}
+=========================================================================================================
+=========================================================================================================
+=========================================================================================================
+''');
+    final data = json.decode(response.data);
+    gLevel=widget.level_specialty;
+
+    final filteredData = (data as List).where((section) => section['id_year'] == "2").toList();
+    setState(() {
+      sections = filteredData;
+    });
+  } catch (e) {
+    print(e);
+  }
+}
+
+  @override
+  Widget build(BuildContext context) {
+    bool isFrench = Provider.of<Language>(context).isFrench; // Access the language state
+
+    return Scaffold(
+
+     appBar: AppBar(
+        title: Text('sections'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.language),
+            onPressed: () {
+              Provider.of<Language>(context, listen: false).toggleLanguage(); // Toggling language
+            },
+          ),
+        ],
+      ),
+      body: ListView.builder(
+        itemCount: sections.length,
+        itemBuilder: (context, index) {
+          return ListTile(
+  title: Text(isFrench ? sections[index]['Abrev_fr'] : sections[index]['Abrev_ar']),
+ onTap: () async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  await prefs.setString('lastSectionId', sections[index]['sectionn_id']);
+    Provider.of<TimetableData>(context, listen: false).setSectionId(sections[index]['sectionn_id']);
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => GroupPage(sectionID: sections[index]['sectionn_id']),
+    ),
+  );
+}
+
+
+          );
+        },
+      ),
+    );
+  }
+
+}
+
+
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:timo/Lang/Language.dart';
+import 'package:timo/Services/cls.dart';
+import 'package:timo/pages/LevelPage.dart';
+
+class SpecialityPage extends StatefulWidget {
+  final String departmentId;
+  final String? specialtyId; // Make it optional by using String?
+
+  // Make specialtyId optional in the constructor
+  SpecialityPage({required this.departmentId, this.specialtyId});
+
+  @override
+  _SpecialityPageState createState() => _SpecialityPageState();
+}
+
+class _SpecialityPageState extends State<SpecialityPage> {
+  List specialities = [];
+  bool isLoading = true; // Add a loading state
+  Dio dio = Dio();
+
+  @override
+  void initState() {
+    super.initState();
+    fetchSpeciality();
+  }
+
+  fetchSpeciality() async {
+    try {
+      final response = await dio.get('https://num.univ-biskra.dz/psp/pspapi/specialty?department=${widget.departmentId}&semester=2&key=appmob');
+      final data = json.decode(response.data);
+      setState(() {
+        specialities = data;
+        isLoading = false; // Set loading to false once data is fetched
+      });
+    } catch (e) {
+      print(e);
+      setState(() {
+        isLoading = false; // Ensure loading is set to false on error as well
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Specialities'),
+      ),
+      body: isLoading
+          ? ListView.builder(
+              itemCount: 10, // Arbitrarily chosen number for shimmer lines
+              itemBuilder: (_, __) => Shimmer.fromColors(
+                baseColor: Colors.grey[300]!,
+                highlightColor: Colors.grey[100]!,
+                child: Container(
+                  margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  height: 20.0,
+                  width: double.infinity,
+                  color: Colors.white,
+                ),
+              ),
+            )
+          : ListView.builder(
+              itemCount: specialities.length,
+              itemBuilder: (context, index) {
+                return ListTile(
+                  title: Text(specialities[index]['Nom_spec']),
+                 onTap: () async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  await prefs.setString('lastSpecialtyId', specialities[index]['id_specialty']);
+  Provider.of<TimetableData>(context, listen: false).setSpecialtyId(specialities[index]['id_specialty']);
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => LevelPage(id_specialty: specialities[index]['id_specialty']),
+    ),
+  );
+},
+
+                );
+              },
+            ),
+    );
+  }
+}
+
+
+import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:timo/Services/cls.dart';
+import 'package:timo/pages/FacultiesPage.dart';
+import 'package:timo/pages/week_days_analyse.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../Services/TimetableEntry.dart'; // Update the import path
+import '../Services/TimetableService.dart'; // Update the import path
+ 
+ 
+class TimeTablePage extends StatefulWidget {
+  @override
+  _TimeTablePageState createState() => _TimeTablePageState();
+}
+
+class _TimeTablePageState extends State<TimeTablePage> {
+  Future<Map<String, List<TimetableEntry>>>? groupedTimetableFuture;
+final List<String> daysOfWeek = [
+    'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
+  ];
+  @override
+  void initState() {
+    super.initState();
+    loadDataAndFetchTimetable();
+  }
+
+  Future<void> loadDataAndFetchTimetable() async {
+    await Provider.of<TimetableData>(context, listen: false).loadPreferences();
+    fetchTimetable();
+  }
+
+void fetchTimetable() {
+  final timetableData = Provider.of<TimetableData>(context, listen: false);
+  var future = TimetableService().fetchTimetable(
+    timetableData.specialtyId,
+    timetableData.levelId,
+    timetableData.sectionId
+  );
+
+  groupedTimetableFuture = future.then((entries) {
+    Map<String, List<TimetableEntry>> groupedByDay = {};
+    for (var entry in entries) {
+      groupedByDay.putIfAbsent(entry.dayName, () => []).add(entry);
+    }
+
+    // Sort each day's entries by time slot
+    groupedByDay.forEach((day, list) {
+      list.sort((a, b) => a.timeSlot.compareTo(b.timeSlot));
+    });
+
+    // Sort days of the week
+    var sortedKeys = groupedByDay.keys.toList()
+      ..sort((a, b) => daysOfWeek.indexOf(a).compareTo(daysOfWeek.indexOf(b)));
+    Map<String, List<TimetableEntry>> sortedMap = {};
+    for (var key in sortedKeys) {
+      sortedMap[key] = groupedByDay[key]!;
+    }
+
+    return sortedMap;
+  });
+
+  setState(() {});
+}
+
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      title: Text('Timetable'),
+    ),
+   body: FutureBuilder<Map<String, List<TimetableEntry>>>(
+  future: groupedTimetableFuture,
+  builder: (context, snapshot) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return CircularProgressIndicator();
+    } else if (snapshot.hasError) {
+      return Text("Error: ${snapshot.error}");
+    } else if (snapshot.data == null || snapshot.data!.isEmpty) {  // Check if data is null or empty
+      return Text("No timetable entries found.");
+    } else {
+      return ListView(
+        children: snapshot.data!.entries.map((entry) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(
+                  entry.key,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+              ...entry.value.map((timetableEntry) {
+                var slotTime = timetableEntry.getSlotTime(); // Get the custom slot time
+                return ListTile(
+                  title: Text("${timetableEntry.moduleCode} - ${timetableEntry.className}"),
+                  subtitle: Text('${timetableEntry.dayName}: ${slotTime['start']} - ${slotTime['end']}'),
+                  onTap: () => _showTimetableEntryDialog(context, timetableEntry),
+                );
+              }).toList(),
+              Divider(),
+            ],
+          );
+        }).toList(),
+      );
+    }
+  },
+),
+
+    floatingActionButton: FloatingActionButton(
+      onPressed: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => WeekdayAnalysisPage( )), // Pass the required data if necessary
+        );
+      },
+      child: Icon(Icons.analytics),
+    ),
+  );
+}
+
+  void _showTimetableEntryDialog(BuildContext context, TimetableEntry entry) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(entry.className, style: TextStyle(fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                ListTile(
+                  leading: Icon(FontAwesomeIcons.chalkboardTeacher),
+                  title: Text('Professor: ${entry.professorFirstName} ${entry.professorLastName}'),
+                ),
+                ListTile(
+                  leading: Icon(FontAwesomeIcons.clock),
+                  title: Text('Time: ${entry.classTime}'),
+                ),
+                ListTile(
+                  leading: Icon(FontAwesomeIcons.building),
+                  title: Text('Location: ${entry.location}'),
+                ),
+                if (entry.isOnline && entry.onlineLink.isNotEmpty)
+                  TextButton(
+                    child: Text('Join Online Class', style: TextStyle(decoration: TextDecoration.underline)),
+                    onPressed: () async {
+                      final Uri url = Uri.parse(entry.onlineLink);
+                      if (await canLaunchUrl(url)) {
+                        await launchUrl(url);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open the link')));
+                      }
+                    },
+                  ),
+                if (entry.gpsLocation.isNotEmpty)
+                  TextButton(
+                    child: Text('View Location', style: TextStyle(decoration: TextDecoration.underline)),
+                    onPressed: () async {
+                      final Uri url = Uri.parse('https://www.google.com/maps/search/?api=1&query=${entry.gpsLocation}');
+                      if (await canLaunchUrl(url)) {
+                        await launchUrl(url);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not launch Google Maps')));
+                      }
+                    },
+                  ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Close'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+import 'dart:math';
+import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:badges/badges.dart' as badges;  // Add prefix to badges package
+import 'package:provider/provider.dart';
+import 'package:timo/Services/cls.dart';
+import 'package:timo/Services/TimetableEntry.dart';
+import 'package:timo/Services/TimetableService.dart';
+
+class WeekdayAnalysisPage extends StatefulWidget {
+  @override
+  _WeekdayAnalysisPageState createState() => _WeekdayAnalysisPageState();
+}
+
+class _WeekdayAnalysisPageState extends State<WeekdayAnalysisPage> {
+  String? selectedDay;
+  List<String> daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  Future<Map<String, List<TimetableEntry>>>? groupedTimetableFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchTimetable();
+  }
+
+  void fetchTimetable() {
+    final timetableData = Provider.of<TimetableData>(context, listen: false);
+    groupedTimetableFuture = TimetableService().fetchTimetable(
+      timetableData.specialtyId,
+      timetableData.levelId,
+      timetableData.sectionId
+    ).then((entries) {
+      Map<String, List<TimetableEntry>> groupedByDay = {};
+      for (var entry in entries) {
+        groupedByDay.putIfAbsent(entry.dayName, () => []).add(entry);
+      }
+      return groupedByDay;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Weekday Analysis'),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.all(8.0),
+            child: DropdownButton<String>(
+              value: selectedDay,
+              hint: Text("Select a day"),
+              items: daysOfWeek.map((String day) {
+                return DropdownMenuItem<String>(
+                  value: day,
+                  child: Text(day),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  selectedDay = value;
+                });
+              },
+            ),
+          ),
+          if (selectedDay != null)
+            FutureBuilder<Map<String, List<TimetableEntry>>>(
+              future: groupedTimetableFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return CircularProgressIndicator();
+                } else if (snapshot.hasError) {
+                  return Text("Error: ${snapshot.error}");
+                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return Text("No timetable entries found.");
+                } else {
+                  return Container(
+                    height: 300,
+                    child: _buildPieChartWithAnnotations(snapshot.data![selectedDay]!),
+                  );
+                }
+              },
+            ),
+          Expanded(
+            child: selectedDay != null
+                ? FutureBuilder<Map<String, List<TimetableEntry>>>(
+                    future: groupedTimetableFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return CircularProgressIndicator();
+                      } else if (snapshot.hasError) {
+                        return Text("Error: ${snapshot.error}");
+                      } else if (!snapshot.hasData || snapshot.data!.isEmpty || !snapshot.data!.containsKey(selectedDay)) {
+                        return Text("No entries for $selectedDay.");
+                      } else {
+                        var entries = snapshot.data![selectedDay]!;
+                        return ListView(
+                          children: entries.map((entry) {
+                            return ListTile(
+                              title: Text('${entry.className}'),
+                              subtitle: Text('${entry.classTime}'),
+                            );
+                          }).toList(),
+                        );
+                      }
+                    },
+                  )
+                : Center(child: Text('Please select a day.')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPieChartWithAnnotations(List<TimetableEntry> entries) {
+    double totalMinutes = entries.fold(0.0, (sum, entry) => sum + entry.timeSlot.toDouble());
+    List<PieChartSectionData> sections = [];
+    List<Widget> annotations = [];
+    double currentAngle = -90.0;
+
+    for (var entry in entries) {
+      double sectionSize = (entry.timeSlot / totalMinutes) * 360;
+      sections.add(PieChartSectionData(
+        color: _randomColor(),
+        value: entry.timeSlot.toDouble(),
+        radius: 50.0,
+      ));
+
+      // Calculate the middle of each section
+      double middleAngle = currentAngle + sectionSize / 2;
+      currentAngle += sectionSize;
+
+      // Calculate position for the badges
+      double xPos = 150 + 100 * cos(middleAngle * pi / 180);
+      double yPos = 150 + 100 * sin(middleAngle * pi / 180);
+
+      // Add badge widget
+      annotations.add(Positioned(
+        left: xPos,
+        top: yPos,
+        child: badges.Badge(
+          badgeContent: Text(entry.className),
+          position: badges.BadgePosition.topEnd(top: -12, end: -20),
+          child: Icon(Icons.arrow_right, size: 24),
+        ),
+      ));
+    }
+
+    return Stack(
+      children: [
+        PieChart(PieChartData(sections: sections)),
+        ...annotations,
+      ],
+    );
+  }
+
+  Color _randomColor() {
+    Random random = Random();
+    return Color.fromRGBO(
+      random.nextInt(256),
+      random.nextInt(256),
+      random.nextInt(256),
+      1,
+    );
+  }
+}
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+class TimetableData with ChangeNotifier {
+  String facultyId = '';
+  String departmentId = '';
+  String specialtyId = '';
+  String levelId = '';
+  String sectionId = '';
+  String groupId = '';
+ Future<void> savePreferences() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString('id_specialty', specialtyId);
+    await prefs.setString('id_niv_spec', levelId);
+    await prefs.setString('sectionn_id', sectionId);
+  }
+  Future<void> loadPreferences() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    specialtyId = prefs.getString('id_specialty') ?? '';
+    levelId = prefs.getString('id_niv_spec') ?? '';
+    sectionId = prefs.getString('sectionn_id') ?? '';
+    notifyListeners();
+  }
+  void setFacultyId(String id) {
+    facultyId = id;
+    notifyListeners();
+    savePreferences();
+  }
+
+  void setDepartmentId(String id) {
+    departmentId = id;
+    notifyListeners();
+    savePreferences();
+  }
+
+  void setSpecialtyId(String id) {
+    specialtyId = id;
+    notifyListeners();
+    savePreferences();
+  }
+
+  void setLevelId(String id) {
+    levelId = id;
+    notifyListeners();
+    savePreferences();
+  }
+
+  void setSectionId(String id) {
+    sectionId = id;
+    notifyListeners();
+    savePreferences();
+  }
+
+  void setGroupId(String id) {
+    groupId = id;
+    notifyListeners();
+    savePreferences();
+  }
+
+  bool get isSetupComplete => 
+    facultyId.isNotEmpty && 
+    departmentId.isNotEmpty &&
+    specialtyId.isNotEmpty && 
+    levelId.isNotEmpty && 
+    sectionId.isNotEmpty;
+}
+class TimetableEntry {
+  String className;
+  String location;
+  String courseType;
+  String level;
+  String field;
+  String professorLastName;
+  String professorFirstName;
+  String moduleCode;
+  int dayOfWeek;
+  int timeSlot;
+  String subGroup;
+  bool isOnline;
+  bool isBiweekly;
+  String onlineLink;
+  String gpsLocation;
+
+  TimetableEntry({
+    required this.className,
+    required this.location,
+    required this.courseType,
+    required this.level,
+    required this.field,
+    required this.professorLastName,
+    required this.professorFirstName,
+    required this.moduleCode,
+    required this.dayOfWeek,
+    required this.timeSlot,
+    required this.subGroup,
+    required this.isOnline,
+    required this.isBiweekly,
+    required this.onlineLink,
+    required this.gpsLocation,
+  });
+
+  factory TimetableEntry.fromJson(List<dynamic> json) {
+    return TimetableEntry(
+      className: json[0] as String,
+      location: json[1] as String,
+      courseType: json[2] as String,
+      level: json[3] as String,
+      field: json[4] as String,
+      professorLastName: json[5] as String,
+      professorFirstName: json[6] as String,
+      moduleCode: json[8] as String,
+      dayOfWeek: int.tryParse(json[12].toString()) ?? 0,
+      timeSlot: int.tryParse(json[13].toString()) ?? 0,
+      subGroup: json.length > 20 ? json[20] as String : "",
+      isOnline: json[19] == "1",
+      isBiweekly: json[20] == "1",
+      onlineLink: json.length > 21 ? json[21] as String : "",
+      gpsLocation: json.length > 22 ? json[22] as String : "",
+    );
+  }
+
+  String get dayName {
+    List<String> days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return dayOfWeek >= 1 && dayOfWeek <= 7 ? days[dayOfWeek - 1] : 'Unknown';
+  }
+
+  String get classTime {
+    List<Duration> startTimes = [
+      Duration(hours: 8, minutes: 0),
+      Duration(hours: 9, minutes: 40),
+      Duration(hours: 11, minutes: 20),
+      Duration(hours: 13, minutes: 10),
+      Duration(hours: 14, minutes: 50),
+      Duration(hours: 16, minutes: 30)
+    ];
+
+    List<Duration> endTimes = [
+      Duration(hours: 9, minutes: 30),
+      Duration(hours: 11, minutes: 10),
+      Duration(hours: 12, minutes: 50),
+      Duration(hours: 14, minutes: 40),
+      Duration(hours: 16, minutes: 20),
+      Duration(hours: 18, minutes: 0)
+    ];
+
+    if (timeSlot >= 1 && timeSlot <= startTimes.length) {
+      var startTime = startTimes[timeSlot - 1];
+      var endTime = endTimes[timeSlot - 1];
+      return '${formatTime(startTime)} - ${formatTime(endTime)}';
+    } else {
+      return 'Unknown time';
+    }
+  }
+  
+Map<String, String> getSlotTime() {
+    Map<int, List<String>> slotTimes = {
+      1: ['08:00', '09:30'],
+      2: ['09:40', '11:10'],
+      3: ['11:20', '12:50'],
+      4: ['13:10', '14:40'],
+      5: ['14:50', '16:20'],
+      6: ['16:30', '18:00'],
+    };
+    var times = slotTimes[timeSlot];
+    return {
+      'start': times![0],
+      'end': times[1],
+    };
+  }
+  String formatTime(Duration duration) {
+    return '${duration.inHours.toString().padLeft(2, '0')}:${(duration.inMinutes % 60).toString().padLeft(2, '0')}';
+  }
+  
+}
+import 'dart:convert';
+import 'package:dio/dio.dart';
+import 'TimetableEntry.dart'; // Update the import path
+
+
+
+
+
+
+
+class TimetableService {
+  final Dio _dio = Dio();
+
+  Future<List<TimetableEntry>> fetchTimetable(String specialtyId, String levelId, String sectionId) async {
+    // Include the levelId in the request URL
+    String requestUrl = 'https://num.univ-biskra.dz/psp/emploi/section2_public?select_spec=$specialtyId&niveau=$levelId&section=$sectionId&groupe=null&sg=0&langu=fr&sem=2&id_year=2';
+    
+    // Log the request URL for debugging
+    print('Requesting Timetable with URL: $requestUrl');
+
+    try {
+      final response = await _dio.get(requestUrl);
+
+      // Log the raw response for debugging
+      print('Response: ${response.data}');
+
+      final List<dynamic> data = json.decode(response.data);
+      return data.map((entry) => TimetableEntry.fromJson(entry)).toList();
+    } catch (e) {
+      print('Error fetching timetable: $e');
+      return [];
+    }
+  }
+}
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timo/Lang/Language.dart';
+import 'package:timo/Services/cls.dart';
+import 'package:timo/pages/FacultiesPage.dart';
+import 'package:timo/pages/TimeTabel.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();  // Ensures plugin initialization is complete before running the app
+  SharedPreferences prefs = await SharedPreferences.getInstance();  // Load shared preferences
+  
+  // Check if all necessary IDs are available
+  bool hasAllIds = prefs.getString('id_specialty') != null &&
+                   prefs.getString('id_niv_spec') != null &&
+                   prefs.getString('sectionn_id') != null;
+
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => Language()),  // If Language settings are used throughout the app
+        ChangeNotifierProvider(create: (context) => TimetableData()),
+      ],
+      child: MyApp(hasAllIds: hasAllIds),
+    ),
+  );
+}
+
+class MyApp extends StatelessWidget {
+  final bool hasAllIds;
+
+  MyApp({required this.hasAllIds});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'TIMO Biskra University Time Table',
+      theme: ThemeData(  // Optional: Set a theme for the app
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+      ),
+      home: hasAllIds ? TimeTablePage() : FacultiesPage(),  // Conditionally launch pages based on the availability of IDs
+    );
+  }
+}
+import 'package:flutter/material.dart';
+ 
+class MainPage extends StatefulWidget {
+  @override
+  _MainPageState createState() => _MainPageState();
+}
+
+class _MainPageState extends State<MainPage> {
+  int _selectedIndex = 0;
+
+  void _onItemTapped(int index) {
+    if (index == 1) {
+      _showSearchSheet();
+    } else {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
+  }
+
+  void _showSearchSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SearchModalSheet(),
+      isScrollControlled: true,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        // Add your page or content here based on the selected index
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        items: const <BottomNavigationBarItem>[
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.search),
+            label: 'Search',
+          ),
+        ],
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+      ),
+    );
+  }
+}
+
+class SearchModalSheet extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.9,
+      maxChildSize: 0.9,
+      builder: (_, controller) {
+        return Container(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            children: [
+              // Add a TextField or any other widget to input search query
+              TextField(
+                decoration: InputDecoration(
+                  labelText: 'Search',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (query) {
+                  // Perform search using your CustomSpecialtySearchDelegate
+                },
+              ),
+              Expanded(
+                child: Container(
+                  // Display search results or suggestions here
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+class TimetableEntry {
+  String className;
+  String location;
+  String courseType;
+  String level;
+  String field;
+  String professorLastName;
+  String professorFirstName;
+  String moduleCode;
+  int dayOfWeek;
+  int timeSlot;
+  String subGroup;
+  bool isOnline;
+  bool isBiweekly;
+  String onlineLink;
+  String gpsLocation; // Add this line
+
+  TimetableEntry({
+    required this.className,
+    required this.location,
+    required this.courseType,
+    required this.level,
+    required this.field,
+    required this.professorLastName,
+    required this.professorFirstName,
+    required this.moduleCode,
+    required this.dayOfWeek,
+    required this.timeSlot,
+    required this.subGroup,
+    required this.isOnline,
+    required this.isBiweekly,
+    required this.onlineLink,
+    required this.gpsLocation, // Add this
+  });
+
+  factory TimetableEntry.fromJson(List<dynamic> json) {
+    return TimetableEntry(
+      className: json[0],
+      location: json[1],
+      courseType: json[2],
+      level: json[3],
+      field: json[4],
+      professorLastName: json[5],
+      professorFirstName: json[6],
+      moduleCode: json[8],
+      dayOfWeek: int.tryParse(json[12]) ?? 0,
+      timeSlot: int.tryParse(json[13]) ?? 0,
+      subGroup: json.length > 20 ? json[20] : "",
+      isOnline: json[19] == "1",
+      isBiweekly: json[20] == "1",
+      onlineLink: json.length > 21 ? json[21] : "",
+      gpsLocation: json.length > 22 ? json[22] : "", // Add this
+    );
+  }
+
+
+String get dayName {
+    List<String> days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return dayOfWeek >= 1 && dayOfWeek <= days.length ? days[dayOfWeek - 1] : 'Unknown';
+  }
+String get classTime {
+    DateTime startTime = DateTime(2024, 1, 1, 8, 0); // Base start time for slot 1
+    final int slotDurationMinutes = 90; // Duration of each slot
+    final int breakDurationMinutes = 10; // Duration of breaks between slots
+
+    // Calculate the start time for the given slot
+    DateTime slotStartTime = startTime.add(Duration(
+      minutes: ((timeSlot - 1) * (slotDurationMinutes + breakDurationMinutes)),
+    ));
+
+    // Calculate the end time by adding the slot duration to the start time
+    DateTime slotEndTime = slotStartTime.add(Duration(minutes: slotDurationMinutes));
+
+    // Format times to string
+    return '${formatTime(slotStartTime)} - ${formatTime(slotEndTime)}';
+  }
+
+  // Helper function to format DateTime objects to time strings
+  String formatTime(DateTime time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+}
+
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
+import 'package:timo/TimetableEntry.dart';
+
+class TimetableService {
+  final Dio _dio = Dio();
+
+  Future<List<TimetableEntry>> fetchTimetable() async {
+    try {
+      final response = await _dio.get('https://num.univ-biskra.dz/psp/emploi/section2_public?select_spec=109&niveau=3&section=521&groupe=null&sg=0&langu=fr&sem=2&id_year=2');
+      final List<dynamic> data = json.decode(response.data); // Assuming the response is properly formatted JSON.
+      List<TimetableEntry> entries = data.map((entry) => TimetableEntry.fromJson(entry)).toList();
+
+      // Sort entries by dayOfWeek and then by timeSlot
+      entries.sort((a, b) {
+        int compareDay = a.dayOfWeek.compareTo(b.dayOfWeek);
+        if (compareDay == 0) {
+          return a.timeSlot.compareTo(b.timeSlot);
+        }
+        return compareDay;
+      });
+
+      return entries;
+    } catch (e) {
+      print(e);
+      return [];
+    }
+  }
+}
